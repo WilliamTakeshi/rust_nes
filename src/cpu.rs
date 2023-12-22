@@ -4,6 +4,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
+    Accumulator,
     Immediate,
     ZeroPage,
     ZeroPage_X,
@@ -102,9 +103,19 @@ impl CPU {
                 0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(&opscode.mode),
                 /* AND */
                 0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&opscode.mode),
+                /* ASL */
+                0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opscode.mode),
                 /* LDA */
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&opscode.mode);
+                }
+                /* LDX */
+                0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
+                    self.ldx(&opscode.mode);
+                }
+                /* LDY */
+                0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
+                    self.ldy(&opscode.mode);
                 }
                 /* SBC */
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opscode.mode),
@@ -129,6 +140,8 @@ impl CPU {
 
     fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
+            AddressingMode::Accumulator => todo!("how accumulator works?"),
+
             AddressingMode::Immediate => self.program_counter,
 
             AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
@@ -208,15 +221,10 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
 
-        dbg!(value);
-        dbg!(self.register_a);
-
         let (value, carry) = self.register_a.overflowing_sub(value);
         // let mut new_value = value;
         // let mut new_carry = carry;
 
-        dbg!(value);
-        dbg!(carry);
         // if !self.is_carry_flag_set() {
         //     (new_value, new_carry) = value.overflowing_sub(1);
         //     new_carry = new_carry | carry
@@ -237,6 +245,17 @@ impl CPU {
         self.update_zero_and_negative_flags(self.register_a);
     }
 
+    fn asl(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.mem_write(addr, value << 1);
+        let carry = (value & 0b1000_0000) != 0b0000_0000;
+
+        self.update_carry_flag(carry);
+        self.update_zero_and_negative_flags(value);
+    }
+
     fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
@@ -244,6 +263,24 @@ impl CPU {
         self.register_a = value;
 
         self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn ldx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.register_x = value;
+
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn ldy(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.register_y = value;
+
+        self.update_zero_and_negative_flags(self.register_y);
     }
 
     fn sta(&mut self, mode: &AddressingMode) {
@@ -354,6 +391,40 @@ mod test {
     }
 
     #[test]
+    fn test_ldx_immediate() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0xa2, 0x10, 0x00]);
+
+        assert_eq!(cpu.register_x, 0x10);
+    }
+
+    #[test]
+    fn test_ldx_from_memory() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x10, 0x55);
+        cpu.load_and_run(vec![0xa6, 0x10, 0x00]);
+
+        assert_eq!(cpu.register_x, 0x55);
+    }
+
+    #[test]
+    fn test_ldy_immediate() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0xa0, 0x10, 0x00]);
+
+        assert_eq!(cpu.register_y, 0x10);
+    }
+
+    #[test]
+    fn test_ldy_from_memory() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x10, 0x55);
+        cpu.load_and_run(vec![0xa4, 0x10, 0x00]);
+
+        assert_eq!(cpu.register_y, 0x55);
+    }
+
+    #[test]
     fn test_adc() {
         let mut cpu = CPU::new();
 
@@ -406,7 +477,6 @@ mod test {
         assert_eq!(cpu.status, 0x00);
     }
 
-
     // TODO: fix overflow in SBC
     // #[test]
     // fn test_sbc_with_overflow() {
@@ -449,11 +519,31 @@ mod test {
     #[test]
     fn test_and2() {
         let mut cpu = CPU::new();
-
         cpu.register_a = 0xFF;
         cpu.mem_write(0x11, 0x2D);
         cpu.load_and_run(vec![0x25, 0x11, 0x00]);
 
         assert_eq!(cpu.register_a, 0x2D);
+    }
+
+    #[test]
+    fn test_asl() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0b0101_0101);
+        cpu.load_and_run(vec![0x06, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0b1010_1010);
+    }
+
+    #[test]
+    fn test_asl_overflow() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0b1010_1010);
+        cpu.load_and_run(vec![0x06, 0x11, 0x00]);
+
+        dbg!(0b0101_0100);
+
+        assert_eq!(cpu.mem_read(0x11), 0b0101_0100);
+        assert_eq!(cpu.is_carry_flag_set(), true);
     }
 }
