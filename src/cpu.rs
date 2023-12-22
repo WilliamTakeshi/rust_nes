@@ -115,6 +115,14 @@ impl CPU {
                 0xB8 => self.clv(),
                 /* EOR */
                 0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&opscode.mode),
+                /* INC */
+                0xE6 | 0xF6 | 0xEE | 0xFE => {
+                    self.inc(&opscode.mode);
+                }
+                /* INX */
+                0xE8 => self.inx(),
+                /* INY */
+                0xC8 => self.iny(),
                 /* LDA */
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&opscode.mode);
@@ -149,7 +157,6 @@ impl CPU {
                 }
 
                 0xAA => self.tax(),
-                0xE8 => self.inx(),
                 0x00 => {
                     return;
                 }
@@ -377,8 +384,21 @@ impl CPU {
         self.update_zero_and_negative_flags(self.register_x);
     }
 
+    fn inc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.mem_write(addr, value.wrapping_add(1));
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
     fn inx(&mut self) {
         self.register_x = self.register_x.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn iny(&mut self) {
+        self.register_y = self.register_y.wrapping_add(1);
         self.update_zero_and_negative_flags(self.register_x);
     }
 
@@ -746,5 +766,23 @@ mod test {
         cpu.load_and_run(vec![0x45, 0x11, 0x00]);
 
         assert_eq!(cpu.register_a, 0b0101_1010);
+    }
+
+    #[test]
+    fn test_inc() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0xE1);
+        cpu.load_and_run(vec![0xE6, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0xE2);
+    }
+
+    #[test]
+    fn test_iny() {
+        let mut cpu = CPU::new();
+        cpu.register_y = 0xE1;
+        cpu.load_and_run(vec![0xC8, 0x00]);
+
+        assert_eq!(cpu.register_y, 0xE2);
     }
 }
