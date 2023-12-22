@@ -113,6 +113,18 @@ impl CPU {
                 0x58 => self.cli(),
                 /* CLV */
                 0xB8 => self.clv(),
+                /* DEC */
+                0xC6 | 0xD6 | 0xCE | 0xDE => {
+                    self.dec(&opscode.mode)
+                }
+                /* DEX */
+                0xCA => {
+                    self.dex()
+                }
+                /* DEY */
+                0x88 => {
+                    self.dey()
+                }
                 /* EOR */
                 0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&opscode.mode),
                 /* INC */
@@ -381,6 +393,24 @@ impl CPU {
 
     fn tax(&mut self) {
         self.register_x = self.register_a;
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+    
+    fn dec(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.mem_write(addr, value.wrapping_sub(1));
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn dex(&mut self) {
+        self.register_x = self.register_x.wrapping_sub(1);
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn dey(&mut self) {
+        self.register_y = self.register_y.wrapping_sub(1);
         self.update_zero_and_negative_flags(self.register_x);
     }
 
@@ -784,5 +814,33 @@ mod test {
         cpu.load_and_run(vec![0xC8, 0x00]);
 
         assert_eq!(cpu.register_y, 0xE2);
+    }
+
+
+    #[test]
+    fn test_dec() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0xE1);
+        cpu.load_and_run(vec![0xC6, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0xE0);
+    }
+
+    #[test]
+    fn test_dex() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0xE1;
+        cpu.load_and_run(vec![0xCA, 0x00]);
+
+        assert_eq!(cpu.register_x, 0xE0);
+    }
+
+    #[test]
+    fn test_dey() {
+        let mut cpu = CPU::new();
+        cpu.register_y = 0xE1;
+        cpu.load_and_run(vec![0x88, 0x00]);
+
+        assert_eq!(cpu.register_y, 0xE0);
     }
 }

@@ -55,6 +55,15 @@ lazy_static! {
         OpCode::new(0x58, "CLI", 1, 2, AddressingMode::NoneAddressing),
         OpCode::new(0xB8, "CLV", 1, 2, AddressingMode::NoneAddressing),
 
+        OpCode::new(0xC6, "DEC", 2, 5, AddressingMode::ZeroPage),
+        OpCode::new(0xD6, "DEC", 2, 6, AddressingMode::ZeroPage_X),
+        OpCode::new(0xCE, "DEC", 3, 6, AddressingMode::Absolute),
+        OpCode::new(0xDE, "DEC", 3, 7, AddressingMode::Absolute_X),
+
+        OpCode::new(0xCA, "DEX", 1, 2, AddressingMode::NoneAddressing),
+        
+        OpCode::new(0x88, "DEY", 1, 2, AddressingMode::NoneAddressing),
+
         OpCode::new(0x49, "EOR", 2, 2, AddressingMode::Immediate),
         OpCode::new(0x45, "EOR", 2, 3, AddressingMode::ZeroPage),
         OpCode::new(0x55, "EOR", 2, 4, AddressingMode::ZeroPage_X),
