@@ -182,6 +182,10 @@ impl CPU {
                 0xAA => self.tax(),
                 /* TAY */
                 0xA8 => self.tay(),
+                /* TXA */
+                0x8A => self.txa(),
+                /* TYA */
+                0x98 => self.tya(),
                 0x00 => {
                     return;
                 }
@@ -271,7 +275,7 @@ impl CPU {
         self.mem_write(addr, updated_value);
 
         self.update_carry_flag(updated_carry);
-        self.update_zero_and_negative_flags(self.register_a);
+        self.update_zero_and_negative_flags(updated_value);
     }
 
     fn sbc(&mut self, mode: &AddressingMode) {
@@ -290,7 +294,7 @@ impl CPU {
         self.mem_write(addr, value);
 
         self.update_carry_flag(carry);
-        self.update_zero_and_negative_flags(self.register_a);
+        self.update_zero_and_negative_flags(value);
     }
 
     fn and(&mut self, mode: &AddressingMode) {
@@ -325,11 +329,12 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
 
-        self.mem_write(addr, value << 1);
+        let updated_value = value << 1;
+        self.mem_write(addr, updated_value);
         let carry = (value & 0b1000_0000) == 0b1000_0000;
 
         self.update_carry_flag(carry);
-        self.update_zero_and_negative_flags(value << 1);
+        self.update_zero_and_negative_flags(updated_value);
     }
 
     // TODO: fix AddressingMode::Accumulator
@@ -464,7 +469,17 @@ impl CPU {
 
     fn tay(&mut self) {
         self.register_y = self.register_a;
-        self.update_zero_and_negative_flags(self.register_x);
+        self.update_zero_and_negative_flags(self.register_y);
+    }
+
+    fn txa(&mut self) {
+        self.register_a = self.register_x;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn tya(&mut self) {
+        self.register_a = self.register_y;
+        self.update_zero_and_negative_flags(self.register_a);
     }
 
     fn dec(&mut self, mode: &AddressingMode) {
@@ -472,7 +487,7 @@ impl CPU {
         let value = self.mem_read(addr);
 
         self.mem_write(addr, value.wrapping_sub(1));
-        self.update_zero_and_negative_flags(self.register_x);
+        self.update_zero_and_negative_flags(value);
     }
 
     fn dex(&mut self) {
@@ -482,7 +497,7 @@ impl CPU {
 
     fn dey(&mut self) {
         self.register_y = self.register_y.wrapping_sub(1);
-        self.update_zero_and_negative_flags(self.register_x);
+        self.update_zero_and_negative_flags(self.register_y);
     }
 
     fn inc(&mut self, mode: &AddressingMode) {
@@ -490,7 +505,7 @@ impl CPU {
         let value = self.mem_read(addr);
 
         self.mem_write(addr, value.wrapping_add(1));
-        self.update_zero_and_negative_flags(self.register_x);
+        self.update_zero_and_negative_flags(value);
     }
 
     fn inx(&mut self) {
@@ -500,7 +515,7 @@ impl CPU {
 
     fn iny(&mut self) {
         self.register_y = self.register_y.wrapping_add(1);
-        self.update_zero_and_negative_flags(self.register_x);
+        self.update_zero_and_negative_flags(self.register_y);
     }
 
     fn is_carry_flag_set(&mut self) -> bool {
@@ -1001,5 +1016,23 @@ mod test {
         cpu.load_and_run(vec![0xa8, 0x00]);
 
         assert_eq!(cpu.register_y, 0xAB)
+    }
+
+    #[test]
+    fn test_txa() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0xAB;
+        cpu.load_and_run(vec![0x8a, 0x00]);
+
+        assert_eq!(cpu.register_a, 0xAB)
+    }
+
+    #[test]
+    fn test_tya() {
+        let mut cpu = CPU::new();
+        cpu.register_y = 0xAB;
+        cpu.load_and_run(vec![0x98, 0x00]);
+
+        assert_eq!(cpu.register_a, 0xAB)
     }
 }
