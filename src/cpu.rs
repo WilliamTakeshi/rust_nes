@@ -113,6 +113,8 @@ impl CPU {
                 0x58 => self.cli(),
                 /* CLV */
                 0xB8 => self.clv(),
+                /* EOR */
+                0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&opscode.mode),
                 /* LDA */
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&opscode.mode);
@@ -129,6 +131,10 @@ impl CPU {
                 0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
                     self.lsr(&opscode.mode);
                 }
+                /* NOP */
+                0xEA => {}
+                /* ORA */
+                0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opscode.mode),
                 /* SBC */
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opscode.mode),
                 /* SEC */
@@ -260,6 +266,24 @@ impl CPU {
         let value = self.mem_read(addr);
 
         self.register_a = value & self.register_a;
+
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn eor(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.register_a = value ^ self.register_a;
+
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn ora(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.register_a = value | self.register_a;
 
         self.update_zero_and_negative_flags(self.register_a);
     }
@@ -650,7 +674,6 @@ mod test {
         assert_eq!(cpu.status, 0b0000_0100);
     }
 
-
     #[test]
     fn test_clc() {
         let mut cpu = CPU::new();
@@ -685,5 +708,43 @@ mod test {
         cpu.load_and_run(vec![0xB8, 0x00]);
 
         assert_eq!(cpu.status, 0b1011_1111);
+    }
+
+    #[test]
+    fn test_ora_immediate() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0b1111_0000;
+        cpu.load_and_run(vec![0x09, 0b1010_1010, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b1111_1010);
+    }
+
+    #[test]
+    fn test_ora_memory() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0b1111_0000;
+        cpu.mem_write(0x11, 0b1010_1010);
+        cpu.load_and_run(vec![0x05, 0x11, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b1111_1010);
+    }
+
+    #[test]
+    fn test_eor_immediate() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0b1111_0000;
+        cpu.load_and_run(vec![0x49, 0b1010_1010, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b0101_1010);
+    }
+
+    #[test]
+    fn test_eor_memory() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0b1111_0000;
+        cpu.mem_write(0x11, 0b1010_1010);
+        cpu.load_and_run(vec![0x45, 0x11, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b0101_1010);
     }
 }
