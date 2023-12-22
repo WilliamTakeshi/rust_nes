@@ -114,17 +114,11 @@ impl CPU {
                 /* CLV */
                 0xB8 => self.clv(),
                 /* DEC */
-                0xC6 | 0xD6 | 0xCE | 0xDE => {
-                    self.dec(&opscode.mode)
-                }
+                0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&opscode.mode),
                 /* DEX */
-                0xCA => {
-                    self.dex()
-                }
+                0xCA => self.dex(),
                 /* DEY */
-                0x88 => {
-                    self.dey()
-                }
+                0x88 => self.dey(),
                 /* EOR */
                 0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&opscode.mode),
                 /* INC */
@@ -155,6 +149,14 @@ impl CPU {
                 0xEA => {}
                 /* ORA */
                 0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opscode.mode),
+                /* ROL */
+                0x2A | 0x26 | 0x36 | 0x2E | 0x3E => {
+                    self.rol(&opscode.mode);
+                }
+                /* ROR */
+                0x6A | 0x66 | 0x76 | 0x6E | 0x7E => {
+                    self.ror(&opscode.mode);
+                }
                 /* SBC */
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opscode.mode),
                 /* SEC */
@@ -243,21 +245,21 @@ impl CPU {
         let value = self.mem_read(addr);
 
         // nightly only
-        // let (new_value, carry) = self
+        // let (updated_value, carry) = self
         //     .register_a
         //     .carrying_add(value, self.is_carry_flag_set(self.status));
 
         let (value, carry) = self.register_a.overflowing_add(value);
-        let mut new_value = value;
-        let mut new_carry = carry;
+        let mut updated_value = value;
+        let mut updated_carry = carry;
         if self.is_carry_flag_set() {
-            (new_value, new_carry) = value.overflowing_add(1);
-            new_carry = new_carry | carry
+            (updated_value, updated_carry) = value.overflowing_add(1);
+            updated_carry = updated_carry | carry
         }
 
-        self.mem_write(addr, new_value);
+        self.mem_write(addr, updated_value);
 
-        self.update_carry_flag(new_carry);
+        self.update_carry_flag(updated_carry);
         self.update_zero_and_negative_flags(self.register_a);
     }
 
@@ -266,12 +268,12 @@ impl CPU {
         let value = self.mem_read(addr);
 
         let (value, carry) = self.register_a.overflowing_sub(value);
-        // let mut new_value = value;
-        // let mut new_carry = carry;
+        // let mut updated_value = value;
+        // let mut updated_carry = carry;
 
         // if !self.is_carry_flag_set() {
-        //     (new_value, new_carry) = value.overflowing_sub(1);
-        //     new_carry = new_carry | carry
+        //     (updated_value, updated_carry) = value.overflowing_sub(1);
+        //     updated_carry = updated_carry | carry
         // }
 
         self.mem_write(addr, value);
@@ -324,11 +326,55 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
 
-        self.mem_write(addr, value >> 1);
+        let updated_value = value >> 1;
+
+        self.mem_write(addr, updated_value);
         let carry = (value & 0b0000_0001) == 0b0000_0001;
 
         self.update_carry_flag(carry);
-        self.update_zero_and_negative_flags(value >> 1);
+        self.update_zero_and_negative_flags(updated_value);
+    }
+
+    fn rol(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        let old_carry = self.is_carry_flag_set();
+
+        let mut updated_value = value << 1;
+
+        if old_carry {
+            // Bit 0 is filled with the current value of the carry flag
+            updated_value = updated_value.wrapping_add(1);
+        }
+
+        self.mem_write(addr, updated_value);
+
+        let carry = (value & 0b1000_0000) == 0b1000_0000;
+        self.update_carry_flag(carry);
+
+        self.update_zero_and_negative_flags(updated_value);
+    }
+
+    fn ror(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        let old_carry = self.is_carry_flag_set();
+
+        let mut updated_value = value >> 1;
+
+        if old_carry {
+            // Bit 7 is filled with the current value of the carry flag
+            updated_value = updated_value.wrapping_add(128);
+        }
+
+        self.mem_write(addr, updated_value);
+
+        let carry = (value & 0b0000_0001) == 0b0000_0001;
+        self.update_carry_flag(carry);
+
+        self.update_zero_and_negative_flags(updated_value);
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
@@ -395,7 +441,7 @@ impl CPU {
         self.register_x = self.register_a;
         self.update_zero_and_negative_flags(self.register_x);
     }
-    
+
     fn dec(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
@@ -816,7 +862,6 @@ mod test {
         assert_eq!(cpu.register_y, 0xE2);
     }
 
-
     #[test]
     fn test_dec() {
         let mut cpu = CPU::new();
@@ -842,5 +887,49 @@ mod test {
         cpu.load_and_run(vec![0x88, 0x00]);
 
         assert_eq!(cpu.register_y, 0xE0);
+    }
+
+    #[test]
+    fn test_rol() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0000;
+        cpu.mem_write(0x11, 0b0101_0101);
+        cpu.load_and_run(vec![0x26, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0b1010_1010);
+        assert_eq!(cpu.status, 0b1000_0000);
+    }
+
+    #[test]
+    fn test_rol_with_carry() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0001;
+        cpu.mem_write(0x11, 0b1010_1010);
+        cpu.load_and_run(vec![0x26, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0b0101_0101);
+        assert_eq!(cpu.status, 0b0000_0001);
+    }
+
+    #[test]
+    fn test_ror() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0000;
+        cpu.mem_write(0x11, 0b1010_1010);
+        cpu.load_and_run(vec![0x66, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0b0101_0101);
+        assert_eq!(cpu.status, 0b0000_0000);
+    }
+
+    #[test]
+    fn test_ror_with_carry() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0001;
+        cpu.mem_write(0x11, 0b1010_1011);
+        cpu.load_and_run(vec![0x66, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0b1101_0101);
+        assert_eq!(cpu.status, 0b1000_0001);
     }
 }
