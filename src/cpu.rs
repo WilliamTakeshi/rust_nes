@@ -117,6 +117,10 @@ impl CPU {
                 0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
                     self.ldy(&opscode.mode);
                 }
+                /* LSR */
+                0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
+                    self.lsr(&opscode.mode);
+                }
                 /* SBC */
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opscode.mode),
                 /* STA */
@@ -245,15 +249,33 @@ impl CPU {
         self.update_zero_and_negative_flags(self.register_a);
     }
 
+    // TODO: fix AddressingMode::Accumulator
     fn asl(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
 
         self.mem_write(addr, value << 1);
-        let carry = (value & 0b1000_0000) != 0b0000_0000;
+        let carry = (value & 0b1000_0000) == 0b1000_0000;
 
         self.update_carry_flag(carry);
-        self.update_zero_and_negative_flags(value);
+        self.update_zero_and_negative_flags(value << 1);
+    }
+
+    // TODO: fix AddressingMode::Accumulator
+    fn lsr(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        self.mem_write(addr, value >> 1);
+        let carry = (value & 0b0000_0001) == 0b0000_0001;
+
+        dbg!(value);
+        dbg!(carry);
+
+        self.update_carry_flag(carry);
+        dbg!(self.status);
+        dbg!((self.status & 0b1000_0000) == 0b1000_0000);
+        self.update_zero_and_negative_flags(value >> 1);
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
@@ -299,14 +321,14 @@ impl CPU {
     }
 
     fn is_carry_flag_set(&mut self) -> bool {
-        (self.status & 0b1000_0000) == 0b1000_0000
+        (self.status & 0b0000_0001) == 0b0000_0001
     }
 
     fn update_carry_flag(&mut self, carry: bool) {
         if carry {
-            self.status = self.status | 0b1000_0000
+            self.status = self.status | 0b0000_0001
         } else {
-            self.status = self.status & 0b0111_1111
+            self.status = self.status & 0b1111_1110
         }
     }
 
@@ -447,7 +469,7 @@ mod test {
 
         assert_eq!(cpu.register_a, 0xff);
         assert_eq!(cpu.mem_read(0x11), 0x01);
-        assert_eq!(cpu.status, 0b1000_0000);
+        assert_eq!(cpu.is_carry_flag_set(), true);
     }
 
     #[test]
@@ -455,13 +477,13 @@ mod test {
         let mut cpu = CPU::new();
 
         cpu.register_a = 0x40;
-        cpu.status = 0b1000_0000;
+        cpu.status = 0b0000_0001;
         cpu.mem_write(0x11, 0x02);
         cpu.load_and_run(vec![0x65, 0x11, 0x00]);
 
         assert_eq!(cpu.register_a, 0x40);
         assert_eq!(cpu.mem_read(0x11), 0x43);
-        assert_eq!(cpu.status, 0b0000_0000);
+        assert_eq!(cpu.is_carry_flag_set(), false);
     }
 
     #[test]
@@ -533,6 +555,7 @@ mod test {
         cpu.load_and_run(vec![0x06, 0x11, 0x00]);
 
         assert_eq!(cpu.mem_read(0x11), 0b1010_1010);
+        assert_eq!(cpu.is_carry_flag_set(), false);
     }
 
     #[test]
@@ -541,9 +564,28 @@ mod test {
         cpu.mem_write(0x11, 0b1010_1010);
         cpu.load_and_run(vec![0x06, 0x11, 0x00]);
 
-        dbg!(0b0101_0100);
-
         assert_eq!(cpu.mem_read(0x11), 0b0101_0100);
         assert_eq!(cpu.is_carry_flag_set(), true);
     }
+
+    #[test]
+    fn test_lsr() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0b1010_1010);
+        cpu.load_and_run(vec![0x46, 0x11, 0x00]);
+
+        assert_eq!(cpu.mem_read(0x11), 0b0101_0101);
+        println!("CPU STATUS: {}", cpu.status);
+        assert_eq!(cpu.is_carry_flag_set(), false);
+    }
+
+    // #[test]
+    // fn test_lsr_overflow() {
+    //     let mut cpu = CPU::new();
+    //     cpu.mem_write(0x11, 0b0101_0101);
+    //     cpu.load_and_run(vec![0x46, 0x11, 0x00]);
+
+    //     assert_eq!(cpu.mem_read(0x11), 0b0010_1010);
+    //     assert_eq!(cpu.is_carry_flag_set(), true);
+    // }
 }
