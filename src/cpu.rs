@@ -109,6 +109,8 @@ impl CPU {
                 0x18 => self.clc(),
                 /* CLD */
                 0xD8 => self.cld(),
+                /* CLI */
+                0x58 => self.cli(),
                 /* LDA */
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&opscode.mode);
@@ -131,6 +133,8 @@ impl CPU {
                 0x38 => self.sec(),
                 /* SED */
                 0xF8 => self.sed(),
+                /* SEI */
+                0x78 => self.sei(),
                 /* STA */
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(&opscode.mode);
@@ -322,12 +326,20 @@ impl CPU {
         self.status = self.status | 0b0000_1000;
     }
 
+    fn sei(&mut self) {
+        self.status = self.status | 0b0000_0100;
+    }
+
     fn clc(&mut self) {
         self.status = self.status & 0b1111_1110;
     }
 
     fn cld(&mut self) {
         self.status = self.status & 0b1111_0111;
+    }
+
+    fn cli(&mut self) {
+        self.status = self.status & 0b1111_1011;
     }
 
     fn tax(&mut self) {
@@ -624,6 +636,14 @@ mod test {
         assert_eq!(cpu.status, 0b0000_1000);
     }
 
+    #[test]
+    fn test_sei() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0x78, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0100);
+    }
+
 
     #[test]
     fn test_clc() {
@@ -639,6 +659,15 @@ mod test {
         let mut cpu = CPU::new();
         cpu.status = 0b0000_1000;
         cpu.load_and_run(vec![0xD8, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0000);
+    }
+
+    #[test]
+    fn test_cli() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0100;
+        cpu.load_and_run(vec![0x58, 0x00]);
 
         assert_eq!(cpu.status, 0b0000_0000);
     }
