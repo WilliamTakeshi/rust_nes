@@ -105,6 +105,10 @@ impl CPU {
                 0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&opscode.mode),
                 /* ASL */
                 0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opscode.mode),
+                /* CLC */
+                0x18 => self.clc(),
+                /* CLD */
+                0xD8 => self.cld(),
                 /* LDA */
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&opscode.mode);
@@ -123,6 +127,10 @@ impl CPU {
                 }
                 /* SBC */
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opscode.mode),
+                /* SEC */
+                0x38 => self.sec(),
+                /* SED */
+                0xF8 => self.sed(),
                 /* STA */
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(&opscode.mode);
@@ -142,6 +150,7 @@ impl CPU {
         }
     }
 
+    // TODO: Fix accumulator
     fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Accumulator => todo!("how accumulator works?"),
@@ -269,12 +278,7 @@ impl CPU {
         self.mem_write(addr, value >> 1);
         let carry = (value & 0b0000_0001) == 0b0000_0001;
 
-        dbg!(value);
-        dbg!(carry);
-
         self.update_carry_flag(carry);
-        dbg!(self.status);
-        dbg!((self.status & 0b1000_0000) == 0b1000_0000);
         self.update_zero_and_negative_flags(value >> 1);
     }
 
@@ -308,6 +312,22 @@ impl CPU {
     fn sta(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_a);
+    }
+
+    fn sec(&mut self) {
+        self.status = self.status | 0b0000_0001;
+    }
+
+    fn sed(&mut self) {
+        self.status = self.status | 0b0000_1000;
+    }
+
+    fn clc(&mut self) {
+        self.status = self.status & 0b1111_1110;
+    }
+
+    fn cld(&mut self) {
+        self.status = self.status & 0b1111_0111;
     }
 
     fn tax(&mut self) {
@@ -575,7 +595,6 @@ mod test {
         cpu.load_and_run(vec![0x46, 0x11, 0x00]);
 
         assert_eq!(cpu.mem_read(0x11), 0b0101_0101);
-        println!("CPU STATUS: {}", cpu.status);
         assert_eq!(cpu.is_carry_flag_set(), false);
     }
 
@@ -588,4 +607,39 @@ mod test {
     //     assert_eq!(cpu.mem_read(0x11), 0b0010_1010);
     //     assert_eq!(cpu.is_carry_flag_set(), true);
     // }
+
+    #[test]
+    fn test_sec() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0x38, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0001);
+    }
+
+    #[test]
+    fn test_sed() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0xF8, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_1000);
+    }
+
+
+    #[test]
+    fn test_clc() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0001;
+        cpu.load_and_run(vec![0x18, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0000);
+    }
+
+    #[test]
+    fn test_cld() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_1000;
+        cpu.load_and_run(vec![0xD8, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0000);
+    }
 }
