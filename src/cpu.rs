@@ -113,6 +113,12 @@ impl CPU {
                 0x58 => self.cli(),
                 /* CLV */
                 0xB8 => self.clv(),
+                /* CMP */
+                0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(&opscode.mode),
+                /* CPX */
+                0xE0 | 0xE4 | 0xEC => self.cpx(&opscode.mode),
+                /* CPY */
+                0xC0 | 0xC4 | 0xCC => self.cpy(&opscode.mode),
                 /* DEC */
                 0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&opscode.mode),
                 /* DEX */
@@ -253,6 +259,42 @@ impl CPU {
                 panic!("mode {:?} is not supported", mode);
             }
         }
+    }
+
+    fn cmp(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        let result = self.register_a.wrapping_sub(value);
+
+        // Not zero and not negative
+        let carry = (result != 0x00) && ((result & 0b1000_0000) != 0b1000_0000);
+        self.update_zero_and_negative_flags(result);
+        self.update_carry_flag(carry);
+    }
+
+    fn cpx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        let result = self.register_x.wrapping_sub(value);
+
+        // Not zero and not negative
+        let carry = (result != 0x00) && ((result & 0b1000_0000) != 0b1000_0000);
+        self.update_zero_and_negative_flags(result);
+        self.update_carry_flag(carry);
+    }
+
+    fn cpy(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        let result = self.register_y.wrapping_sub(value);
+
+        // Not zero and not negative
+        let carry = (result != 0x00) && ((result & 0b1000_0000) != 0b1000_0000);
+        self.update_zero_and_negative_flags(result);
+        self.update_carry_flag(carry);
     }
 
     fn adc(&mut self, mode: &AddressingMode) {
@@ -1034,5 +1076,90 @@ mod test {
         cpu.load_and_run(vec![0x98, 0x00]);
 
         assert_eq!(cpu.register_a, 0xAB)
+    }
+
+    #[test]
+    fn test_cmp_immediate_zero() {
+        let mut cpu = CPU::new();
+        // cpu.mem_write(0x11, 0xAA);
+        cpu.register_a = 0xAA;
+        cpu.load_and_run(vec![0xC9, 0xAA, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0010)
+    }
+
+    #[test]
+    fn test_cmp_memory_negative() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0xAB);
+        cpu.register_a = 0xAA;
+        cpu.load_and_run(vec![0xC5, 0x11, 0x00]);
+
+        assert_eq!(cpu.status, 0b1000_0000)
+    }
+
+    #[test]
+    fn test_cmp_immediate_positive() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0xAA;
+        cpu.load_and_run(vec![0xC9, 0xA0, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0001)
+    }
+
+    #[test]
+    fn test_cpx_immediate_zero() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0xAA;
+        cpu.load_and_run(vec![0xE0, 0xAA, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0010)
+    }
+
+    #[test]
+    fn test_cpx_memory_negative() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0xAB);
+        cpu.register_x = 0xAA;
+        cpu.load_and_run(vec![0xE4, 0x11, 0x00]);
+
+        assert_eq!(cpu.status, 0b1000_0000)
+    }
+
+    #[test]
+    fn test_cpx_immediate_positive() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0xAA;
+        cpu.load_and_run(vec![0xE0, 0xA0, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0001)
+    }
+
+    #[test]
+    fn test_cpy_immediate_zero() {
+        let mut cpu = CPU::new();
+        cpu.register_y = 0xAA;
+        cpu.load_and_run(vec![0xC0, 0xAA, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0010)
+    }
+
+    #[test]
+    fn test_cpy_memory_negative() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0xAB);
+        cpu.register_y = 0xAA;
+        cpu.load_and_run(vec![0xC4, 0x11, 0x00]);
+
+        assert_eq!(cpu.status, 0b1000_0000)
+    }
+
+    #[test]
+    fn test_cpy_immediate_positive() {
+        let mut cpu = CPU::new();
+        cpu.register_y = 0xAA;
+        cpu.load_and_run(vec![0xC0, 0xA0, 0x00]);
+
+        assert_eq!(cpu.status, 0b0000_0001)
     }
 }
