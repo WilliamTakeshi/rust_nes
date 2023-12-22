@@ -111,6 +111,8 @@ impl CPU {
                 0xD8 => self.cld(),
                 /* CLI */
                 0x58 => self.cli(),
+                /* CLV */
+                0xB8 => self.clv(),
                 /* LDA */
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&opscode.mode);
@@ -340,6 +342,10 @@ impl CPU {
 
     fn cli(&mut self) {
         self.status = self.status & 0b1111_1011;
+    }
+
+    fn clv(&mut self) {
+        self.status = self.status & 0b1011_1111;
     }
 
     fn tax(&mut self) {
@@ -648,27 +654,36 @@ mod test {
     #[test]
     fn test_clc() {
         let mut cpu = CPU::new();
-        cpu.status = 0b0000_0001;
+        cpu.status = 0b1111_1111;
         cpu.load_and_run(vec![0x18, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0000);
+        assert_eq!(cpu.status, 0b1111_1110);
     }
 
     #[test]
     fn test_cld() {
         let mut cpu = CPU::new();
-        cpu.status = 0b0000_1000;
+        cpu.status = 0b1111_1111;
         cpu.load_and_run(vec![0xD8, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0000);
+        assert_eq!(cpu.status, 0b1111_0111);
     }
 
     #[test]
     fn test_cli() {
         let mut cpu = CPU::new();
-        cpu.status = 0b0000_0100;
+        cpu.status = 0b1111_1111;
         cpu.load_and_run(vec![0x58, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0000);
+        assert_eq!(cpu.status, 0b1111_1011);
+    }
+
+    #[test]
+    fn test_clv() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b1111_1111;
+        cpu.load_and_run(vec![0xB8, 0x00]);
+
+        assert_eq!(cpu.status, 0b1011_1111);
     }
 }
