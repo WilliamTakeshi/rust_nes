@@ -58,6 +58,7 @@ fn handle_user_input(cpu: &mut CPU, event_pump: &mut EventPump) {
                 cpu.mem_write(0xff, 0x77);
             }
             Event::KeyDown {
+                // keycode: Some(Keycode::R), // Colemak
                 keycode: Some(Keycode::S),
                 ..
             } => {
@@ -70,6 +71,7 @@ fn handle_user_input(cpu: &mut CPU, event_pump: &mut EventPump) {
                 cpu.mem_write(0xff, 0x61);
             }
             Event::KeyDown {
+                // keycode: Some(Keycode::S), // Colemak
                 keycode: Some(Keycode::D),
                 ..
             } => {
