@@ -16,7 +16,6 @@ pub enum AddressingMode {
     NoneAddressing,
 }
 
-
 const STACK: u16 = 0x0100;
 const STACK_RESET: u8 = 0xfd;
 
@@ -160,6 +159,38 @@ impl CPU {
                 0xE8 => self.inx(),
                 /* INY */
                 0xC8 => self.iny(),
+                /* JMP Absolute */
+                0x4c => {
+                    let mem_address = self.mem_read_u16(self.program_counter);
+                    self.program_counter = mem_address;
+                }
+
+                /* JMP Indirect */
+                0x6c => {
+                    let mem_address = self.mem_read_u16(self.program_counter);
+                    // let indirect_ref = self.mem_read_u16(mem_address);
+                    //6502 bug mode with with page boundary:
+                    //  if address $3000 contains $40, $30FF contains $80, and $3100 contains $50,
+                    // the result of JMP ($30FF) will be a transfer of control to $4080 rather than $5080 as you intended
+                    // i.e. the 6502 took the low byte of the address from $30FF and the high byte from $3000
+
+                    let indirect_ref = if mem_address & 0x00FF == 0x00FF {
+                        let lo = self.mem_read(mem_address);
+                        let hi = self.mem_read(mem_address & 0xFF00);
+                        (hi as u16) << 8 | (lo as u16)
+                    } else {
+                        self.mem_read_u16(mem_address)
+                    };
+
+                    self.program_counter = indirect_ref;
+                }
+
+                /* JSR */
+                0x20 => {
+                    self.stack_push_u16(self.program_counter + 2 - 1);
+                    let target_address = self.mem_read_u16(self.program_counter);
+                    self.program_counter = target_address
+                }
                 /* LDA */
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&opscode.mode);
@@ -181,6 +212,20 @@ impl CPU {
                 0xEA => {}
                 /* ORA */
                 0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opscode.mode),
+                /* PHA */
+                0x48 => self.stack_push(self.register_a),
+                /* PLA */
+                0x68 => {
+                    self.pla();
+                }
+                /* PHP */
+                0x08 => {
+                    self.php();
+                }
+                /* PLP */
+                0x28 => {
+                    self.plp();
+                }
                 /* ROL */
                 0x2A => self.rol_accumulator(),
                 0x26 | 0x36 | 0x2E | 0x3E => {
@@ -190,6 +235,19 @@ impl CPU {
                 0x6A => self.ror_accumulator(),
                 0x66 | 0x76 | 0x6E | 0x7E => {
                     self.ror(&opscode.mode);
+                }
+                /* RTI */
+                0x40 => {
+                    self.status = self.stack_pop();
+                    self.status = self.status & 0b1110_1111;
+                    self.status = self.status | 0b0010_0000;
+
+                    self.program_counter = self.stack_pop_u16();
+                }
+
+                /* RTS */
+                0x60 => {
+                    self.program_counter = self.stack_pop_u16() + 1;
                 }
                 /* SBC */
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opscode.mode),
@@ -785,6 +843,49 @@ impl CPU {
         } else {
             self.status = self.status & 0b0111_1111;
         }
+    }
+
+    fn stack_pop(&mut self) -> u8 {
+        self.stack_pointer = self.stack_pointer.wrapping_add(1);
+        self.mem_read((STACK as u16) + self.stack_pointer as u16)
+    }
+
+    fn stack_push(&mut self, data: u8) {
+        self.mem_write((STACK as u16) + self.stack_pointer as u16, data);
+        self.stack_pointer = self.stack_pointer.wrapping_sub(1)
+    }
+
+    fn stack_push_u16(&mut self, data: u16) {
+        let hi = (data >> 8) as u8;
+        let lo = (data & 0xff) as u8;
+        self.stack_push(hi);
+        self.stack_push(lo);
+    }
+
+    fn stack_pop_u16(&mut self) -> u16 {
+        let lo = self.stack_pop() as u16;
+        let hi = self.stack_pop() as u16;
+
+        hi << 8 | lo
+    }
+
+    fn pla(&mut self) {
+        let data = self.stack_pop();
+        self.register_a = data;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn plp(&mut self) {
+        self.status = self.stack_pop();
+        self.status = self.status & 0b1110_1111;
+        self.status = self.status | 0b0010_0000;
+    }
+
+    fn php(&mut self) {
+        let flags = self.status.clone();
+        self.status = self.status | 0b0011_0000;
+
+        self.stack_push(flags);
     }
 }
 

@@ -112,6 +112,11 @@ lazy_static! {
 
         OpCode::new(0xC8, "INY", 1, 2, AddressingMode::NoneAddressing),
 
+        OpCode::new(0x4c, "JMP", 3, 3, AddressingMode::NoneAddressing), //AddressingMode that acts as Immidiate
+        OpCode::new(0x6c, "JMP", 3, 5, AddressingMode::NoneAddressing), //AddressingMode:Indirect with 6502 bug
+
+        OpCode::new(0x20, "JSR", 3, 6, AddressingMode::NoneAddressing),
+
         OpCode::new(0xA9, "LDA", 2, 2, AddressingMode::Immediate),
         OpCode::new(0xA5, "LDA", 2, 3, AddressingMode::ZeroPage),
         OpCode::new(0xB5, "LDA", 2, 4, AddressingMode::ZeroPage_X),
@@ -150,6 +155,11 @@ lazy_static! {
         OpCode::new(0x01, "ORA", 2, 6, AddressingMode::Indirect_X),
         OpCode::new(0x11, "ORA", 2, 5/*+1 if page crossed*/, AddressingMode::Indirect_Y),
 
+        OpCode::new(0x48, "PHA", 1, 3, AddressingMode::NoneAddressing),
+        OpCode::new(0x68, "PLA", 1, 4, AddressingMode::NoneAddressing),
+        OpCode::new(0x08, "PHP", 1, 3, AddressingMode::NoneAddressing),
+        OpCode::new(0x28, "PLP", 1, 4, AddressingMode::NoneAddressing),
+
         OpCode::new(0x2A, "ROL", 1, 2, AddressingMode::NoneAddressing),
         OpCode::new(0x26, "ROL", 2, 5, AddressingMode::ZeroPage),
         OpCode::new(0x36, "ROL", 2, 6, AddressingMode::ZeroPage_X),
@@ -161,6 +171,9 @@ lazy_static! {
         OpCode::new(0x76, "ROR", 2, 6, AddressingMode::ZeroPage_X),
         OpCode::new(0x6E, "ROR", 3, 6, AddressingMode::Absolute),
         OpCode::new(0x7E, "ROR", 3, 7, AddressingMode::Absolute_X),
+
+        OpCode::new(0x40, "RTI", 1, 6, AddressingMode::NoneAddressing),
+        OpCode::new(0x60, "RTS", 1, 6, AddressingMode::NoneAddressing),
 
         OpCode::new(0xE9, "SBC", 2, 2, AddressingMode::Immediate),
         OpCode::new(0xE5, "SBC", 2, 3, AddressingMode::ZeroPage),
