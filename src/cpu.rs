@@ -4,7 +4,6 @@ use std::collections::HashMap;
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
-    Accumulator,
     Immediate,
     ZeroPage,
     ZeroPage_X,
@@ -104,7 +103,8 @@ impl CPU {
                 /* AND */
                 0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&opscode.mode),
                 /* ASL */
-                0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opscode.mode),
+                0x0A => self.asl_accumulator(),
+                0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opscode.mode),
                 /* CLC */
                 0x18 => self.clc(),
                 /* CLD */
@@ -148,7 +148,8 @@ impl CPU {
                     self.ldy(&opscode.mode);
                 }
                 /* LSR */
-                0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
+                0x4A => self.lsr_accumulator(),
+                0x46 | 0x56 | 0x4E | 0x5E => {
                     self.lsr(&opscode.mode);
                 }
                 /* NOP */
@@ -156,11 +157,13 @@ impl CPU {
                 /* ORA */
                 0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opscode.mode),
                 /* ROL */
-                0x2A | 0x26 | 0x36 | 0x2E | 0x3E => {
+                0x2A => self.rol_accumulator(),
+                0x26 | 0x36 | 0x2E | 0x3E => {
                     self.rol(&opscode.mode);
                 }
                 /* ROR */
-                0x6A | 0x66 | 0x76 | 0x6E | 0x7E => {
+                0x6A => self.ror_accumulator(),
+                0x66 | 0x76 | 0x6E | 0x7E => {
                     self.ror(&opscode.mode);
                 }
                 /* SBC */
@@ -204,11 +207,8 @@ impl CPU {
         }
     }
 
-    // TODO: Fix accumulator
     fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
-            AddressingMode::Accumulator => todo!("how accumulator works?"),
-
             AddressingMode::Immediate => self.program_counter,
 
             AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
@@ -366,7 +366,17 @@ impl CPU {
         self.update_zero_and_negative_flags(self.register_a);
     }
 
-    // TODO: fix AddressingMode::Accumulator
+    fn asl_accumulator(&mut self) {
+        let value = self.register_a;
+
+        let updated_value = value << 1;
+        self.register_a = updated_value;
+        let carry = (value & 0b1000_0000) == 0b1000_0000;
+
+        self.update_carry_flag(carry);
+        self.update_zero_and_negative_flags(updated_value);
+    }
+
     fn asl(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
@@ -379,7 +389,16 @@ impl CPU {
         self.update_zero_and_negative_flags(updated_value);
     }
 
-    // TODO: fix AddressingMode::Accumulator
+    fn lsr_accumulator(&mut self) {
+        let carry: bool = (self.register_a & 0b0000_0001) == 0b0000_0001;
+        let updated_value = self.register_a >> 1;
+
+        self.register_a = updated_value;
+
+        self.update_carry_flag(carry);
+        self.update_zero_and_negative_flags(updated_value);
+    }
+
     fn lsr(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
@@ -390,6 +409,26 @@ impl CPU {
         let carry = (value & 0b0000_0001) == 0b0000_0001;
 
         self.update_carry_flag(carry);
+        self.update_zero_and_negative_flags(updated_value);
+    }
+
+    fn rol_accumulator(&mut self) {
+        let value = self.register_a;
+
+        let old_carry = self.is_carry_flag_set();
+
+        let mut updated_value = value << 1;
+
+        if old_carry {
+            // Bit 0 is filled with the current value of the carry flag
+            updated_value = updated_value.wrapping_add(1);
+        }
+
+        self.register_a = updated_value;
+
+        let carry = (value & 0b1000_0000) == 0b1000_0000;
+        self.update_carry_flag(carry);
+
         self.update_zero_and_negative_flags(updated_value);
     }
 
@@ -409,6 +448,26 @@ impl CPU {
         self.mem_write(addr, updated_value);
 
         let carry = (value & 0b1000_0000) == 0b1000_0000;
+        self.update_carry_flag(carry);
+
+        self.update_zero_and_negative_flags(updated_value);
+    }
+
+    fn ror_accumulator(&mut self) {
+        let value = self.register_a;
+
+        let old_carry = self.is_carry_flag_set();
+
+        let mut updated_value = value >> 1;
+
+        if old_carry {
+            // Bit 7 is filled with the current value of the carry flag
+            updated_value = updated_value.wrapping_add(128);
+        }
+
+        self.register_a = updated_value;
+
+        let carry = (value & 0b0000_0001) == 0b0000_0001;
         self.update_carry_flag(carry);
 
         self.update_zero_and_negative_flags(updated_value);
@@ -818,15 +877,15 @@ mod test {
         assert_eq!(cpu.is_carry_flag_set(), false);
     }
 
-    // #[test]
-    // fn test_lsr_overflow() {
-    //     let mut cpu = CPU::new();
-    //     cpu.mem_write(0x11, 0b0101_0101);
-    //     cpu.load_and_run(vec![0x46, 0x11, 0x00]);
+    #[test]
+    fn test_lsr_overflow() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x11, 0b0101_0101);
+        cpu.load_and_run(vec![0x46, 0x11, 0x00]);
 
-    //     assert_eq!(cpu.mem_read(0x11), 0b0010_1010);
-    //     assert_eq!(cpu.is_carry_flag_set(), true);
-    // }
+        assert_eq!(cpu.mem_read(0x11), 0b0010_1010);
+        assert_eq!(cpu.is_carry_flag_set(), true);
+    }
 
     #[test]
     fn test_sec() {
@@ -1161,5 +1220,47 @@ mod test {
         cpu.load_and_run(vec![0xC0, 0xA0, 0x00]);
 
         assert_eq!(cpu.status, 0b0000_0001)
+    }
+
+    #[test]
+    fn test_asl_accumulator() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0b0101_0101;
+        cpu.load_and_run(vec![0x0A, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b1010_1010);
+        assert_eq!(cpu.is_carry_flag_set(), false);
+    }
+
+    #[test]
+    fn test_lsr_accumulator() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0b1010_1010;
+        cpu.load_and_run(vec![0x4A, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b0101_0101);
+        assert_eq!(cpu.is_carry_flag_set(), false);
+    }
+
+    #[test]
+    fn test_rol_accumulator() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0000;
+        cpu.register_a = 0b0101_0101;
+        cpu.load_and_run(vec![0x2A, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b1010_1010);
+        assert_eq!(cpu.status, 0b1000_0000);
+    }
+
+    #[test]
+    fn test_ror_accumulator() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0000;
+        cpu.register_a = 0b1010_1010;
+        cpu.load_and_run(vec![0x6A, 0x00]);
+
+        assert_eq!(cpu.register_a, 0b0101_0101);
+        assert_eq!(cpu.status, 0b0000_0000);
     }
 }
