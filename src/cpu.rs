@@ -16,12 +16,17 @@ pub enum AddressingMode {
     NoneAddressing,
 }
 
+
+const STACK: u16 = 0x0100;
+const STACK_RESET: u8 = 0xfd;
+
 #[derive(Debug)]
 pub struct CPU {
     pub register_a: u8,
     pub register_x: u8,
     pub register_y: u8,
     pub status: u8,
+    pub stack_pointer: u8,
     pub program_counter: u16,
     memory: [u8; 0xffff],
 }
@@ -33,6 +38,7 @@ impl CPU {
             register_x: 0,
             register_y: 0,
             status: 0,
+            stack_pointer: STACK_RESET,
             program_counter: 0,
             memory: [0; 0xffff],
         }
@@ -63,6 +69,7 @@ impl CPU {
         self.register_a = 0;
         self.register_x = 0;
         self.register_y = 0;
+        self.stack_pointer = STACK_RESET;
         self.status = 0;
 
         self.program_counter = self.mem_read_u16(0xFFFC);
@@ -191,8 +198,12 @@ impl CPU {
                 0xAA => self.tax(),
                 /* TAY */
                 0xA8 => self.tay(),
+                /* TSX */
+                0xBA => self.tsx(),
                 /* TXA */
                 0x8A => self.txa(),
+                /* TXS */
+                0x9A => self.txs(),
                 /* TYA */
                 0x98 => self.tya(),
                 0x00 => {
@@ -571,6 +582,16 @@ impl CPU {
     fn tay(&mut self) {
         self.register_y = self.register_a;
         self.update_zero_and_negative_flags(self.register_y);
+    }
+
+    fn txs(&mut self) {
+        self.stack_pointer = self.register_x;
+        self.update_zero_and_negative_flags(self.stack_pointer);
+    }
+
+    fn tsx(&mut self) {
+        self.register_x = self.stack_pointer;
+        self.update_zero_and_negative_flags(self.register_x);
     }
 
     fn txa(&mut self) {
@@ -1262,5 +1283,23 @@ mod test {
 
         assert_eq!(cpu.register_a, 0b0101_0101);
         assert_eq!(cpu.status, 0b0000_0000);
+    }
+
+    #[test]
+    fn test_tsx() {
+        let mut cpu = CPU::new();
+        cpu.stack_pointer = 0x10;
+        cpu.load_and_run(vec![0xBA, 0x00]);
+
+        assert_eq!(cpu.register_x, 0x10);
+    }
+
+    #[test]
+    fn test_txs() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0x10;
+        cpu.load_and_run(vec![0x9A, 0x00]);
+
+        assert_eq!(cpu.stack_pointer, 0x10);
     }
 }
