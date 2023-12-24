@@ -43,11 +43,11 @@ impl CPU {
         }
     }
 
-    fn mem_read(&self, addr: u16) -> u8 {
+    pub fn mem_read(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
 
-    fn mem_write(&mut self, addr: u16, data: u8) {
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.memory[addr as usize] = data;
     }
 
@@ -74,9 +74,14 @@ impl CPU {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
+    // pub fn load(&mut self, program: Vec<u8>) {
+    //     self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
+    //     self.mem_write_u16(0xFFFC, 0x8000);
+    // }
+
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
-        self.mem_write_u16(0xFFFC, 0x8000);
+        self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program[..]);
+        self.mem_write_u16(0xFFFC, 0x0600);
     }
 
     pub fn load_reset_and_run(&mut self, program: Vec<u8>) {
@@ -92,9 +97,17 @@ impl CPU {
     }
 
     pub fn run(&mut self) {
+        self.run_with_callback(|_| {});
+    }
+
+    pub fn run_with_callback<F>(&mut self, mut callback: F)
+    where
+        F: FnMut(&mut CPU),
+    {
         let ref opcodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
 
         loop {
+            callback(self);
             let code = self.mem_read(self.program_counter);
             self.program_counter += 1;
             let program_counter_state = self.program_counter;
@@ -436,18 +449,6 @@ impl CPU {
 
         if self.status & 0b0100_0000 == 0b0100_0000 {
             self.program_counter = self.program_counter.wrapping_add(offset as u16);
-        }
-    }
-
-    fn branch(&mut self, condition: bool) {
-        if condition {
-            let jump: i8 = self.mem_read(self.program_counter) as i8;
-            let jump_addr = self
-                .program_counter
-                .wrapping_add(1)
-                .wrapping_add(jump as u16);
-
-            self.program_counter = jump_addr;
         }
     }
 
