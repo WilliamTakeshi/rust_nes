@@ -128,6 +128,8 @@ impl CPU {
                 0x50 => self.bvc(),
                 /* BVS */
                 0x70 => self.bvs(),
+                /* BIT */
+                0x24 | 0x2C => self.bit(&opscode.mode),
                 /* CLC */
                 0x18 => self.clc(),
                 /* CLD */
@@ -285,6 +287,25 @@ impl CPU {
             AddressingMode::NoneAddressing => {
                 panic!("mode {:?} is not supported", mode);
             }
+        }
+    }
+
+    fn bit(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read(addr);
+        let and = self.register_a & data;
+        if and == 0 {
+            self.status = self.status | 0b0000_0010;
+        } else {
+            self.status = self.status & 0b1111_1101;
+        }
+
+        if data & 0b10000000 > 0 {
+            self.status = self.status | 0b1000_0000;
+        }
+
+        if data & 0b01000000 > 0 {
+            self.status = self.status | 0b0100_0000;
         }
     }
 
@@ -1469,5 +1490,15 @@ mod test {
         cpu.load_and_run(vec![0x70, 0x10, 0x00]);
 
         assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_bit() {
+        let mut cpu = CPU::new();
+        cpu.register_a = 0b1010_1010;
+        cpu.mem_write(0x11, 0b0101_0101);
+        cpu.load_and_run(vec![0x24, 0x11, 0x00]);
+
+        assert_eq!(cpu.status, 0b0100_0010);
     }
 }
