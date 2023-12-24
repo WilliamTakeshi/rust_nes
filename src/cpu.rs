@@ -112,6 +112,22 @@ impl CPU {
                 /* ASL */
                 0x0A => self.asl_accumulator(),
                 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opscode.mode),
+                /* BCC */
+                0x90 => self.bcc(),
+                /* BCS */
+                0xB0 => self.bcs(),
+                /* BEQ */
+                0xF0 => self.beq(),
+                /* BMI */
+                0x30 => self.bmi(),
+                /* BNE */
+                0xD0 => self.bne(),
+                /* BPL */
+                0x10 => self.bpl(),
+                /* BVC */
+                0x50 => self.bvc(),
+                /* BVS */
+                0x70 => self.bvs(),
                 /* CLC */
                 0x18 => self.clc(),
                 /* CLD */
@@ -269,6 +285,90 @@ impl CPU {
             AddressingMode::NoneAddressing => {
                 panic!("mode {:?} is not supported", mode);
             }
+        }
+    }
+
+    fn bcc(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if !self.is_carry_flag_set() {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn bcs(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if self.is_carry_flag_set() {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn beq(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if self.status & 0b0000_0010 == 0b0000_0010 {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn bmi(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if self.status & 0b1000_0000 == 0b1000_0000 {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn bne(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if self.status & 0b0000_0010 == 0b0000_0000 {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn bpl(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if self.status & 0b1000_0000 == 0b0000_0000 {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn bvc(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if self.status & 0b0100_0000 == 0b0000_0000 {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn bvs(&mut self) {
+        let offset = self.mem_read(self.program_counter) as i8;
+        self.program_counter += 1;
+
+        if self.status & 0b0100_0000 == 0b0100_0000 {
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
+    fn branch(&mut self, condition: bool) {
+        if condition {
+            let jump: i8 = self.mem_read(self.program_counter) as i8;
+            let jump_addr = self
+                .program_counter
+                .wrapping_add(1)
+                .wrapping_add(jump as u16);
+
+            self.program_counter = jump_addr;
         }
     }
 
@@ -1301,5 +1401,73 @@ mod test {
         cpu.load_and_run(vec![0x9A, 0x00]);
 
         assert_eq!(cpu.stack_pointer, 0x10);
+    }
+
+    #[test]
+    fn test_bcc() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0x90, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_bcs() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0001;
+        cpu.load_and_run(vec![0xB0, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_beq() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0000_0010;
+        cpu.load_and_run(vec![0xF0, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_bmi() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b1000_0000;
+        cpu.load_and_run(vec![0x30, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_bne() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0xD0, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_bpl() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0x10, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_bvc() {
+        let mut cpu = CPU::new();
+        cpu.load_and_run(vec![0x50, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
+    }
+
+    #[test]
+    fn test_bvs() {
+        let mut cpu = CPU::new();
+        cpu.status = 0b0100_0000;
+        cpu.load_and_run(vec![0x70, 0x10, 0x00]);
+
+        assert_eq!(cpu.program_counter, 0x8013);
     }
 }
