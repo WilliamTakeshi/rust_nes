@@ -1,9 +1,12 @@
 pub mod cpu;
 pub mod opcodes;
 pub mod bus;
+pub mod cartridge;
 #[macro_use]
 extern crate lazy_static;
 
+use bus::Bus;
+use cartridge::Rom;
 use cpu::CPU;
 use cpu::Mem;
 use rand::Rng;
@@ -120,14 +123,18 @@ fn main() {
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
     canvas.set_scale(10.0, 10.0).unwrap();
+
     let creator = canvas.texture_creator();
     let mut texture = creator
         .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
         .unwrap();
 
     //load the game
-    let mut cpu = CPU::new();
-    cpu.load(game_code);
+    let bytes: Vec<u8> = std::fs::read("snake.nes").unwrap();
+    let rom = Rom::new(&bytes).unwrap();
+
+    let bus = Bus::new(rom);
+    let mut cpu = CPU::new(bus);
     cpu.reset();
 
     // run the game cycle
