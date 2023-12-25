@@ -18,6 +18,7 @@ pub enum AddressingMode {
 
 const STACK: u16 = 0x0100;
 const STACK_RESET: u8 = 0xfd;
+const DEFAULT_CPU_STATUS: u8 = 0b0010_0100;
 
 #[derive(Debug)]
 pub struct CPU {
@@ -72,7 +73,7 @@ impl CPU {
             register_a: 0,
             register_x: 0,
             register_y: 0,
-            status: 0b0010_0100,
+            status: DEFAULT_CPU_STATUS,
             stack_pointer: STACK_RESET,
             program_counter: 0,
             bus: bus,
@@ -84,16 +85,16 @@ impl CPU {
         self.register_x = 0;
         self.register_y = 0;
         self.stack_pointer = STACK_RESET;
-        self.status = 0b0010_0100;
+        self.status = DEFAULT_CPU_STATUS;
 
-        self.program_counter = self.mem_read_u16(0xFFFC);
+        self.program_counter = self.mem_read_u16(0x0599);
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
         for i in 0..(program.len() as u16) {
-            self.mem_write(0x8600 + i, program[i as usize]);
+            self.mem_write(0x0600 + i, program[i as usize]);
         }
-        self.mem_write_u16(0xFFFC, 0x8600);
+        self.mem_write_u16(0x0599, 0x0600);
     }
 
     pub fn load_reset_and_run(&mut self, program: Vec<u8>) {
@@ -104,7 +105,7 @@ impl CPU {
 
     pub fn load_and_run(&mut self, program: Vec<u8>) {
         self.load(program);
-        self.program_counter = self.mem_read_u16(0xFFFC);
+        self.program_counter = self.mem_read_u16(0x0599);
         self.run()
     }
 
@@ -1018,7 +1019,7 @@ mod test {
 
         assert_eq!(cpu.register_a, 0x44);
         assert_eq!(cpu.mem_read(0x11), 0x40);
-        assert_eq!(cpu.status, 0x00);
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS);
     }
 
     #[test]
@@ -1061,7 +1062,7 @@ mod test {
 
         assert_eq!(cpu.register_a, 0x04);
         assert_eq!(cpu.mem_read(0x11), 0x04);
-        assert_eq!(cpu.status, 0x01);
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0x01);
     }
 
     #[test]
@@ -1075,7 +1076,7 @@ mod test {
 
         assert_eq!(cpu.register_a, 0xFD);
         assert_eq!(cpu.mem_read(0x11), 0xff);
-        assert_eq!(cpu.status, 0b1000_0000);
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b1000_0000);
     }
 
     #[test]
@@ -1166,7 +1167,7 @@ mod test {
         let mut cpu = CPU::new(bus);
         cpu.load_and_run(vec![0x38, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0001);
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0001);
     }
 
     #[test]
@@ -1175,7 +1176,7 @@ mod test {
         let mut cpu = CPU::new(bus);
         cpu.load_and_run(vec![0xF8, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_1000);
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_1000);
     }
 
     #[test]
@@ -1184,7 +1185,7 @@ mod test {
         let mut cpu = CPU::new(bus);
         cpu.load_and_run(vec![0x78, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0100);
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0100);
     }
 
     #[test]
@@ -1445,7 +1446,7 @@ mod test {
         cpu.register_a = 0xAA;
         cpu.load_and_run(vec![0xC9, 0xAA, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0010)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0011)
     }
 
     #[test]
@@ -1456,7 +1457,7 @@ mod test {
         cpu.register_a = 0xAA;
         cpu.load_and_run(vec![0xC5, 0x11, 0x00]);
 
-        assert_eq!(cpu.status, 0b1000_0000)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b1000_0000)
     }
 
     #[test]
@@ -1466,7 +1467,7 @@ mod test {
         cpu.register_a = 0xAA;
         cpu.load_and_run(vec![0xC9, 0xA0, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0001)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0001)
     }
 
     #[test]
@@ -1476,7 +1477,7 @@ mod test {
         cpu.register_x = 0xAA;
         cpu.load_and_run(vec![0xE0, 0xAA, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0010)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0011)
     }
 
     #[test]
@@ -1487,7 +1488,7 @@ mod test {
         cpu.register_x = 0xAA;
         cpu.load_and_run(vec![0xE4, 0x11, 0x00]);
 
-        assert_eq!(cpu.status, 0b1000_0000)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b1000_0000)
     }
 
     #[test]
@@ -1497,7 +1498,7 @@ mod test {
         cpu.register_x = 0xAA;
         cpu.load_and_run(vec![0xE0, 0xA0, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0001)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0001)
     }
 
     #[test]
@@ -1507,7 +1508,7 @@ mod test {
         cpu.register_y = 0xAA;
         cpu.load_and_run(vec![0xC0, 0xAA, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0010)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0011)
     }
 
     #[test]
@@ -1518,7 +1519,7 @@ mod test {
         cpu.register_y = 0xAA;
         cpu.load_and_run(vec![0xC4, 0x11, 0x00]);
 
-        assert_eq!(cpu.status, 0b1000_0000)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b1000_0000)
     }
 
     #[test]
@@ -1528,7 +1529,7 @@ mod test {
         cpu.register_y = 0xAA;
         cpu.load_and_run(vec![0xC0, 0xA0, 0x00]);
 
-        assert_eq!(cpu.status, 0b0000_0001)
+        assert_eq!(cpu.status, DEFAULT_CPU_STATUS | 0b0000_0001)
     }
 
     #[test]
