@@ -1,9 +1,11 @@
 pub mod cpu;
 pub mod opcodes;
+pub mod bus;
 #[macro_use]
 extern crate lazy_static;
 
 use cpu::CPU;
+use cpu::Mem;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::EventPump;

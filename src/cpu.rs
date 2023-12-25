@@ -1,4 +1,4 @@
-use crate::opcodes;
+use crate::{bus::Bus, opcodes};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -27,29 +27,13 @@ pub struct CPU {
     pub status: u8,
     pub stack_pointer: u8,
     pub program_counter: u16,
-    memory: [u8; 0xffff],
+    pub bus: Bus,
 }
 
-impl CPU {
-    pub fn new() -> Self {
-        CPU {
-            register_a: 0,
-            register_x: 0,
-            register_y: 0,
-            status: 0,
-            stack_pointer: STACK_RESET,
-            program_counter: 0,
-            memory: [0; 0xffff],
-        }
-    }
+pub trait Mem {
+    fn mem_read(&self, addr: u16) -> u8;
 
-    pub fn mem_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
-    }
-
-    pub fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data;
-    }
+    fn mem_write(&mut self, addr: u16, data: u8);
 
     fn mem_read_u16(&self, pos: u16) -> u16 {
         let lo = self.mem_read(pos) as u16;
@@ -63,6 +47,58 @@ impl CPU {
         self.mem_write(pos, lo);
         self.mem_write(pos + 1, hi);
     }
+}
+
+impl Mem for CPU {
+    fn mem_read(&self, addr: u16) -> u8 {
+        self.bus.mem_read(addr)
+    }
+
+    fn mem_write(&mut self, addr: u16, data: u8) {
+        self.bus.mem_write(addr, data)
+    }
+    fn mem_read_u16(&self, pos: u16) -> u16 {
+        self.bus.mem_read_u16(pos)
+    }
+
+    fn mem_write_u16(&mut self, pos: u16, data: u16) {
+        self.bus.mem_write_u16(pos, data)
+    }
+}
+
+impl CPU {
+    pub fn new() -> Self {
+        CPU {
+            register_a: 0,
+            register_x: 0,
+            register_y: 0,
+            status: 0,
+            stack_pointer: STACK_RESET,
+            program_counter: 0,
+            bus: Bus::new(),
+        }
+    }
+
+    // pub fn mem_read(&self, addr: u16) -> u8 {
+    //     self.memory[addr as usize]
+    // }
+
+    // pub fn mem_write(&mut self, addr: u16, data: u8) {
+    //     self.memory[addr as usize] = data;
+    // }
+
+    // fn mem_read_u16(&self, pos: u16) -> u16 {
+    //     let lo = self.mem_read(pos) as u16;
+    //     let hi = self.mem_read(pos + 1) as u16;
+    //     (hi << 8) | (lo as u16)
+    // }
+
+    // fn mem_write_u16(&mut self, pos: u16, data: u16) {
+    //     let hi = (data >> 8) as u8;
+    //     let lo = (data & 0xff) as u8;
+    //     self.mem_write(pos, lo);
+    //     self.mem_write(pos + 1, hi);
+    // }
 
     pub fn reset(&mut self) {
         self.register_a = 0;
@@ -80,7 +116,9 @@ impl CPU {
     // }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program[..]);
+        for i in 0..(program.len() as u16) {
+            self.mem_write(0x0600 + i, program[i as usize]);
+        }
         self.mem_write_u16(0xFFFC, 0x0600);
     }
 
@@ -493,11 +531,7 @@ impl CPU {
     fn add_to_register_a(&mut self, data: u8) {
         let sum = self.register_a as u16
             + data as u16
-            + (if self.status & 0b0000_0001 > 0 {
-                1
-            } else {
-                0
-            }) as u16;
+            + (if self.status & 0b0000_0001 > 0 { 1 } else { 0 }) as u16;
 
         let carry = sum > 0xff;
 
@@ -505,7 +539,6 @@ impl CPU {
             self.status = self.status | 0b0000_0001;
         } else {
             self.status = self.status & 0b1111_1110;
-
         }
 
         let result = sum as u8;
