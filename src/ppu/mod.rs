@@ -25,6 +25,7 @@ pub struct NesPPU {
     internal_data_buf: u8,
     scanline: u16,
     cycles: usize,
+    pub nmi_interrupt: Option<u8>,
 }
 pub trait PPU {
     fn write_to_ctrl(&mut self, value: u8);
@@ -61,6 +62,7 @@ impl NesPPU {
             internal_data_buf: 0,
             scanline: 0,
             cycles: 0,
+            nmi_interrupt: None,
         }
     }
 

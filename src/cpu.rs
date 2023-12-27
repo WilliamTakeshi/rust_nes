@@ -20,6 +20,27 @@ const STACK: u16 = 0x0100;
 const STACK_RESET: u8 = 0xfd;
 const DEFAULT_CPU_STATUS: u8 = 0b0010_0100;
 
+mod interrupt {
+    #[derive(PartialEq, Eq)]
+    pub enum InterruptType {
+        NMI,
+    }
+
+    #[derive(PartialEq, Eq)]
+    pub(super) struct Interrupt {
+        pub(super) itype: InterruptType,
+        pub(super) vector_addr: u16,
+        pub(super) b_flag_mask: u8,
+        pub(super) cpu_cycles: u8,
+    }
+    pub(super) const NMI: Interrupt = Interrupt {
+        itype: InterruptType::NMI,
+        vector_addr: 0xfffA,
+        b_flag_mask: 0b00100000,
+        cpu_cycles: 2,
+    };
+}
+
 #[derive(Debug)]
 pub struct CPU {
     pub register_a: u8,
@@ -113,28 +134,28 @@ impl CPU {
         self.run()
     }
 
-    // fn interrupt(&mut self, interrupt: interrupt::Interrupt) {
-    //     self.stack_push_u16(self.program_counter);
-    //     let mut flag = self.status.clone();
+    fn interrupt(&mut self, interrupt: interrupt::Interrupt) {
+        self.stack_push_u16(self.program_counter);
+        let mut flag = self.status.clone();
 
-    //     if interrupt.b_flag_mask & 0b010000 == 1 {
-    //         flag = flag | 0b0001_0000;
-    //     } else {
-    //         flag = flag & 0b1110_1111;
-    //     }
+        if interrupt.b_flag_mask & 0b010000 == 1 {
+            flag = flag | 0b0001_0000;
+        } else {
+            flag = flag & 0b1110_1111;
+        }
 
-    //     if interrupt.b_flag_mask & 0b100000 == 1 {
-    //         flag = flag | 0b0000_0010;
-    //     } else {
-    //         flag = flag & 0b1111_1101;
-    //     }
+        if interrupt.b_flag_mask & 0b100000 == 1 {
+            flag = flag | 0b0000_0010;
+        } else {
+            flag = flag & 0b1111_1101;
+        }
 
-    //     self.stack_push(flag.bits);
-    //     self.status.insert(CpuFlags::INTERRUPT_DISABLE);
+        self.stack_push(flag);
+        self.status = self.status | 0b0000_0100;
 
-    //     self.bus.tick(interrupt.cpu_cycles);
-    //     self.program_counter = self.mem_read_u16(interrupt.vector_addr);
-    // }
+        self.bus.tick(interrupt.cpu_cycles);
+        self.program_counter = self.mem_read_u16(interrupt.vector_addr);
+    }
 
     pub fn run(&mut self) {
         self.run_with_callback(|_| {});
@@ -147,9 +168,9 @@ impl CPU {
         let ref opcodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
 
         loop {
-            // if let Some(_nmi) = self.bus.poll_nmi_status() {
-            //     self.interrupt(interrupt::NMI);
-            // }
+            if let Some(_nmi) = self.bus.poll_nmi_status() {
+                self.interrupt(interrupt::NMI);
+            }
 
             callback(self);
             let code = self.mem_read(self.program_counter);
