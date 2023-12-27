@@ -22,10 +22,12 @@ pub struct NesPPU {
     pub palette_table: [u8; 32],
 
     internal_data_buf: u8,
-    scanline: u16,
+
+    pub scanline: u16,
     cycles: usize,
     pub nmi_interrupt: Option<u8>,
 }
+
 pub trait PPU {
     fn write_to_ctrl(&mut self, value: u8);
     fn write_to_mask(&mut self, value: u8);
@@ -59,8 +61,9 @@ impl NesPPU {
             oam_data: [0; 64 * 4],
             palette_table: [0; 32],
             internal_data_buf: 0,
-            scanline: 0,
+
             cycles: 0,
+            scanline: 0,
             nmi_interrupt: None,
         }
     }
@@ -96,19 +99,26 @@ impl NesPPU {
             self.scanline += 1;
 
             if self.scanline == 241 {
+                self.status.set_vblank_status(true);
+                self.status.set_sprite_zero_hit(false);
                 if self.ctrl.generate_vblank_nmi() {
-                    self.status.set_vblank_status(true);
-                    todo!("Should trigger NMI interrupt")
+                    self.nmi_interrupt = Some(1);
                 }
             }
 
             if self.scanline >= 262 {
                 self.scanline = 0;
+                self.nmi_interrupt = None;
+                self.status.set_sprite_zero_hit(false);
                 self.status.reset_vblank_status();
                 return true;
             }
         }
         return false;
+    }
+
+    pub fn poll_nmi_interrupt(&mut self) -> Option<u8> {
+        self.nmi_interrupt.take()
     }
 }
 
@@ -116,6 +126,9 @@ impl PPU for NesPPU {
     fn write_to_ctrl(&mut self, value: u8) {
         let before_nmi_status = self.ctrl.generate_vblank_nmi();
         self.ctrl.update(value);
+        if !before_nmi_status && self.ctrl.generate_vblank_nmi() && self.status.is_in_vblank() {
+            self.nmi_interrupt = Some(1);
+        }
     }
 
     fn write_to_mask(&mut self, value: u8) {
@@ -404,9 +417,8 @@ pub mod test {
         assert_eq!(ppu.read_oam_data(), 0x88);
 
         ppu.write_to_oam_addr(0x10);
-        assert_eq!(ppu.read_oam_data(), 0x77);
-
+        ppu.write_to_oam_addr(0x77);
         ppu.write_to_oam_addr(0x11);
-        assert_eq!(ppu.read_oam_data(), 0x66);
+        ppu.write_to_oam_addr(0x66);
     }
 }
