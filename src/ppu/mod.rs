@@ -23,6 +23,8 @@ pub struct NesPPU {
     pub palette_table: [u8; 32],
 
     internal_data_buf: u8,
+    scanline: u16,
+    cycles: usize,
 }
 pub trait PPU {
     fn write_to_ctrl(&mut self, value: u8);
@@ -57,6 +59,8 @@ impl NesPPU {
             oam_data: [0; 64 * 4],
             palette_table: [0; 32],
             internal_data_buf: 0,
+            scanline: 0,
+            cycles: 0,
         }
     }
 
@@ -82,6 +86,28 @@ impl NesPPU {
 
     fn increment_vram_addr(&mut self) {
         self.addr.increment(self.ctrl.vram_addr_increment());
+    }
+
+    pub fn tick(&mut self, cycles: u8) -> bool {
+        self.cycles += cycles as usize;
+        if self.cycles >= 341 {
+            self.cycles = self.cycles - 341;
+            self.scanline += 1;
+
+            if self.scanline == 241 {
+                if self.ctrl.generate_vblank_nmi() {
+                    self.status.set_vblank_status(true);
+                    todo!("Should trigger NMI interrupt")
+                }
+            }
+
+            if self.scanline >= 262 {
+                self.scanline = 0;
+                self.status.reset_vblank_status();
+                return true;
+            }
+        }
+        return false;
     }
 }
 
