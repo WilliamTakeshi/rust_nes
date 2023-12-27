@@ -1,6 +1,7 @@
 pub mod bus;
 pub mod cartridge;
 pub mod cpu;
+pub mod joypad;
 pub mod opcodes;
 pub mod ppu;
 pub mod render;
@@ -189,7 +190,6 @@ fn main() {
         .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
 
-
     // //load the game
     // let bytes: Vec<u8> = std::fs::read("snake.nes").unwrap();
     // let rom = Rom::new(&bytes).unwrap();
@@ -232,16 +232,26 @@ fn main() {
     //     println!("{}", trace(cpu));
     // });
 
+    // joypad
+    let mut key_map = HashMap::new();
+    key_map.insert(Keycode::Down, joypad::JoypadButton::DOWN);
+    key_map.insert(Keycode::Up, joypad::JoypadButton::UP);
+    key_map.insert(Keycode::Right, joypad::JoypadButton::RIGHT);
+    key_map.insert(Keycode::Left, joypad::JoypadButton::LEFT);
+    key_map.insert(Keycode::Space, joypad::JoypadButton::SELECT);
+    key_map.insert(Keycode::Return, joypad::JoypadButton::START);
+    key_map.insert(Keycode::A, joypad::JoypadButton::BUTTON_A);
+    key_map.insert(Keycode::S, joypad::JoypadButton::BUTTON_B);
 
     //load the game
+
     let bytes: Vec<u8> = std::fs::read("pacman.nes").unwrap();
-    dbg!(&bytes);
     let rom = Rom::new(&bytes).unwrap();
 
     let mut frame = Frame::new();
 
     // run the game cycle
-    let bus = Bus::new(rom, move |ppu: &NesPPU| {
+    let bus = Bus::new(rom, move |ppu: &NesPPU, joypad: &mut joypad::Joypad| {
         render::render(ppu, &mut frame);
         texture.update(None, &frame.data, 256 * 3).unwrap();
 
@@ -249,13 +259,24 @@ fn main() {
 
         canvas.present();
         for event in event_pump.poll_iter() {
-            // println!("7654");
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => std::process::exit(0),
+
+                Event::KeyDown { keycode, .. } => {
+                    if let Some(key) = key_map.get(&keycode.unwrap_or(Keycode::Ampersand)) {
+                        joypad.set_button_pressed_status(*key, true);
+                    }
+                }
+                Event::KeyUp { keycode, .. } => {
+                    if let Some(key) = key_map.get(&keycode.unwrap_or(Keycode::Ampersand)) {
+                        joypad.set_button_pressed_status(*key, false);
+                    }
+                }
+
                 _ => { /* do nothing */ }
             }
         }
@@ -264,14 +285,23 @@ fn main() {
     let mut cpu = CPU::new(bus);
 
     cpu.reset();
-    // cpu.run();
+    cpu.run();
 
-    cpu.run_with_callback(move |cpu| {
-        let ref opscodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
+    // cpu.run_with_callback(move |cpu| {
+    //     let ref opscodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
 
-        let code = cpu.mem_read(cpu.program_counter);
-        let ops = opscodes.get(&code).unwrap();
-        
-        println!("OPS: {}, PC{}, A{}, X{}, Y{}, ST{}, SP{}", ops.code, cpu.program_counter, cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.stack_pointer);
-    });
+    //     let code = cpu.mem_read(cpu.program_counter);
+    //     let ops = opscodes.get(&code).unwrap();
+
+    //     println!(
+    //         "OPS: {}, PC{}, A{}, X{}, Y{}, ST{}, SP{}",
+    //         ops.code,
+    //         cpu.program_counter,
+    //         cpu.register_a,
+    //         cpu.register_x,
+    //         cpu.register_y,
+    //         cpu.status,
+    //         cpu.stack_pointer
+    //     );
+    // });
 }

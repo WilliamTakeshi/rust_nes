@@ -1,7 +1,7 @@
 use crate::{
     cartridge::Rom,
     cpu::Mem,
-    ppu::{NesPPU, PPU},
+    ppu::{NesPPU, PPU}, joypad::Joypad,
 };
 
 pub struct Bus<'call> {
@@ -10,13 +10,14 @@ pub struct Bus<'call> {
     ppu: NesPPU,
     cycles: usize,
 
-    gameloop_callback: Box<dyn FnMut(&NesPPU) + 'call>,
+    gameloop_callback: Box<dyn FnMut(&NesPPU, &mut Joypad) + 'call>,
+    joypad1: Joypad,
 }
 
 impl<'a> Bus<'a> {
     pub fn new<'call, F>(rom: Rom, gameloop_callback: F) -> Bus<'call>
     where
-        F: FnMut(&NesPPU) + 'call,
+        F: FnMut(&NesPPU, &mut Joypad) + 'call,
     {
         let ppu = NesPPU::new(rom.chr_rom, rom.screen_mirroring);
 
@@ -26,6 +27,7 @@ impl<'a> Bus<'a> {
             ppu: ppu,
             cycles: 0,
             gameloop_callback: Box::from(gameloop_callback),
+            joypad1: Joypad::new()
         }
     }
 
@@ -38,23 +40,11 @@ impl<'a> Bus<'a> {
         self.prg_rom[addr as usize]
     }
 
-    // pub fn tick(&mut self, cycles: u8) {
-    //     self.cycles += cycles as usize;
-
-    //     let nmi_before = self.ppu.nmi_interrupt.is_some();
-    //     self.ppu.tick(cycles * 3);
-    //     let nmi_after = self.ppu.nmi_interrupt.is_some();
-
-    //     if !nmi_before && nmi_after {
-    //         (self.gameloop_callback)(&self.ppu, &mut self.joypad1);
-    //     }
-    // }
-
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
         let new_frame = self.ppu.tick(cycles * 3);
         if new_frame {
-            (self.gameloop_callback)(&self.ppu);
+            (self.gameloop_callback)(&self.ppu, &mut self.joypad1);
         }
     }
 
