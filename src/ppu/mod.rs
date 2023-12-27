@@ -7,7 +7,6 @@ use registers::status::StatusRegister;
 
 pub mod registers;
 
-#[derive(Debug)]
 pub struct NesPPU {
     pub chr_rom: Vec<u8>,
     pub mirroring: Mirroring,

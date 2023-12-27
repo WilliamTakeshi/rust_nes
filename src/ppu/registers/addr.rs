@@ -1,4 +1,3 @@
-#[derive(Debug)]
 pub struct AddrRegister {
     value: (u8, u8),
     hi_ptr: bool,

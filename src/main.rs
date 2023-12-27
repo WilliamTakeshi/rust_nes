@@ -12,10 +12,13 @@ extern crate lazy_static;
 #[macro_use]
 extern crate bitflags;
 
+use std::collections::HashMap;
+
 use bus::Bus;
 use cartridge::Rom;
 use cpu::Mem;
 use cpu::CPU;
+use ppu::NesPPU;
 use render::frame::Frame;
 // use rand::Rng;
 use sdl2::event::Event;
@@ -172,19 +175,20 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window("Snake game", (32.0 * 10.0) as u32, (32.0 * 10.0) as u32)
+        .window("Tile viewer", (256.0 * 3.0) as u32, (240.0 * 3.0) as u32)
         .position_centered()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
-    canvas.set_scale(10.0, 10.0).unwrap();
+    canvas.set_scale(3.0, 3.0).unwrap();
 
     let creator = canvas.texture_creator();
     let mut texture = creator
-        .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
+        .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
+
 
     // //load the game
     // let bytes: Vec<u8> = std::fs::read("snake.nes").unwrap();
@@ -219,7 +223,7 @@ fn main() {
     // let bytes: Vec<u8> = std::fs::read("nestest.nes").unwrap();
     // let rom = Rom::new(&bytes).unwrap();
 
-    // let bus = Bus::new(rom);
+    // let bus: Bus<'_> = Bus::new(rom, |_ppu: &NesPPU| {});
     // let mut cpu = CPU::new(bus);
     // cpu.reset();
     // cpu.program_counter = 0xC000;
@@ -228,18 +232,24 @@ fn main() {
     //     println!("{}", trace(cpu));
     // });
 
+
     //load the game
     let bytes: Vec<u8> = std::fs::read("pacman.nes").unwrap();
+    dbg!(&bytes);
     let rom = Rom::new(&bytes).unwrap();
 
-    let tile_frame = show_tile(&rom.chr_rom, 1, 0);
+    let mut frame = Frame::new();
 
-    texture.update(None, &tile_frame.data, 256 * 3).unwrap();
-    canvas.copy(&texture, None, None).unwrap();
-    canvas.present();
+    // run the game cycle
+    let bus = Bus::new(rom, move |ppu: &NesPPU| {
+        render::render(ppu, &mut frame);
+        texture.update(None, &frame.data, 256 * 3).unwrap();
 
-    loop {
+        canvas.copy(&texture, None, None).unwrap();
+
+        canvas.present();
         for event in event_pump.poll_iter() {
+            // println!("7654");
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
@@ -249,5 +259,19 @@ fn main() {
                 _ => { /* do nothing */ }
             }
         }
-    }
+    });
+
+    let mut cpu = CPU::new(bus);
+
+    cpu.reset();
+    // cpu.run();
+
+    cpu.run_with_callback(move |cpu| {
+        let ref opscodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
+
+        let code = cpu.mem_read(cpu.program_counter);
+        let ops = opscodes.get(&code).unwrap();
+        
+        println!("OPS: {}, PC{}, A{}, X{}, Y{}, ST{}, SP{}", ops.code, cpu.program_counter, cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.stack_pointer);
+    });
 }
